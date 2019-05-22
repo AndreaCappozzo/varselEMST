@@ -31,15 +31,25 @@ var_sel_EMST_raedda_l <-
     RES[["Best"]] <- list()
     for (model_name in model_names) {
       RES[[model_name]] <- list()
-      RES[[model_name]] <- raedda_l_EMST_model_new(X_train = X_train,
-                                          class_train = class_train,
-                                          alpha_train =  alpha_train,
-                                          n_relevant_variables = n_relevant_variables,
-                                          model_name=model_name,
-                                          swap_step = swap_step,
-                                          ctrl_init = ctrl_init,
-                                          ctrl_GA = ctrl_GA,
-                                          ...)
+      # RES[[model_name]] <- raedda_l_EMST_model_new(X_train = X_train,
+      #                                     class_train = class_train,
+      #                                     alpha_train =  alpha_train,
+      #                                     n_relevant_variables = n_relevant_variables,
+      #                                     model_name=model_name,
+      #                                     swap_step = swap_step,
+      #                                     ctrl_init = ctrl_init,
+      #                                     ctrl_GA = ctrl_GA,
+      #                                     ...)
+
+      RES[[model_name]] <- raedda_l_EMST_model(X_train = X_train,
+                                                   class_train = class_train,
+                                                   alpha_train =  alpha_train,
+                                                   n_relevant_variables = n_relevant_variables,
+                                                   model_name=model_name,
+                                                   swap_step = swap_step,
+                                                   ctrl_init = ctrl_init,
+                                                   ctrl_GA = ctrl_GA,
+                                                   ...)
       if (!is.na(RES[[model_name]]$bic)) {
         if (RES[[model_name]]$bic > bestBIC) {
           RES[["Best"]] <- RES[[model_name]]
