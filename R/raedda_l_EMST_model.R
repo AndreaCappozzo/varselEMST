@@ -47,8 +47,59 @@ raedda_l_EMST_model <- function(X_train,
     V_E_F <- robust_result$V_E_F
     G_E_F <- robust_result$G_E_F
 
-  }
+  } else{
 
+    # M step: computed for the whole set of columns D
+
+    fitm <-
+      mclust::mstep(modelName = model_name,
+                    data = X_train,
+                    z = ltrain)
+    S_R_w <- fitm$parameters$variance$sigma
+    fitm_one_group <-
+      mclust::mstep(modelName = model_name,
+                    data = X_train,
+                    z = rep(1, nrow(X_train)))
+    # fitm_one_group is used afterwards for updating the regression parameters
+    S_R <- fitm_one_group$parameters$variance$sigma[, , 1]
+
+    # S step
+    if(model_name=="EEI") {
+      F_position <- order(diag(S_R_w[,,1])/diag(S_R)) # (5.21 b) Ritter pag 209
+      F_subset <- (1:D)[F_position<=n_relevant_variables]
+    } else if(model_name == "VVI") {
+      F_position <-
+        order(log(apply(S_R_w, 3, diag)/ diag(S_R)) %*% fitm$parameters$pro) # (5.21) Ritter pag 209
+      F_subset <- (1:D)[F_position<=n_relevant_variables]
+    } else {
+      if(swap_step=="exhaustive"){
+        H_F_value <- apply(possible_col_subset, 1, H_F_subset, S_R_w=S_R_w, S_R=S_R, fitm = fitm)
+        F_subset <-
+          possible_col_subset[which.min(H_F_value), , drop = TRUE]
+      } else if (swap_step=="ga"){
+        swap_step_GA <- kofnGA::kofnGA(
+          n = D,
+          k = n_relevant_variables,
+          popsize = ctrl_GA$popsize,
+          keepbest = ctrl_GA$keepbest,
+          ngen = ctrl_GA$ngen,
+          tourneysize = ctrl_GA$tourneysize,
+          mutprob = ctrl_GA$mutprob,
+          mutfrac = ctrl_GA$mutfrac,
+          initpop = ctrl_GA$initpop,
+          cluster = ctrl_GA$cluster,
+          sharedmemory = ctrl_GA$sharedmemory,
+          OF = H_F_subset,
+          S_R_w = S_R_w,
+          S_R = S_R,
+          fitm = fitm,
+          verbose = 0
+        )
+        F_subset <- swap_step_GA$bestsol
+      }
+    }
+    E_subset <- setdiff(1:D, F_subset)
+}
   # Checking if errors in the procedure -------------------------------------
 
   fitetrain <-
