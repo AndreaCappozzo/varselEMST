@@ -40,17 +40,45 @@
 # # model_name <- "VVV"
 # # ctrl_init <- raedda::control_init()
 #
-# test_0 <- varselEMST::var_sel_EMST_raedda_l(
+# test_0 <- var_sel_EMST_raedda_l(
 #   X_train = X_train,
 #   class_train = Class,
 #   n_relevant_variables = 2,
-#   alpha_train = .1,
-#   model_names = "EVE",
+#   alpha_train = 0,
+#   model_names = "VVV",
 #   ctrl_init = control_init_EMST(n_samp = 1),
-#   swap_step = "exhaustive",
+#   swap_step = "ga",
 #   ctrl_GA = control_GA(ngen = 10),
-#   verbose = F
+#   verbose = T
 # )
+#
+# test_05 <- var_sel_EMST_raedda_l(
+#   X_train = X_train,
+#   class_train = Class,
+#   n_relevant_variables = 2,
+#   alpha_train = 0.05,
+#   model_names = "VVV",
+#   ctrl_init = control_init_EMST(n_samp = 1),
+#   swap_step = "ga",
+#   ctrl_GA = control_GA(ngen = 10),
+#   verbose = T
+# )
+# test_0$Best$train$cl
+# test_05$Best$train$cl_after_trimming
+#
+# clPairs(XX, test_05$Best$train$cl_after_trimming, gap = 0)
+#
+# # Function variables
+# X_train = X_train
+# class_train = Class
+# n_relevant_variables = 2
+# alpha_train = 0
+# model_names = "VVV"
+# model_name = "VVV"
+# ctrl_init = control_init_EMST(n_samp = 1)
+# swap_step = "ga"
+# ctrl_GA = control_GA(ngen = 10)
+# verbose = T
 #
 # test_0$Best$relevant_variables
 #

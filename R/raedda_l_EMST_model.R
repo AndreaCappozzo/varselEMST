@@ -1,14 +1,13 @@
 raedda_l_EMST_model <- function(X_train,
-                           class_train,
-                           n_relevant_variables,
-                           alpha_train,
-                           # The proportion of obs in the Xtrain to be trimmed
-                           model_name,
-                           swap_step,
-                           ctrl_init,
-                           ctrl_GA,
-                           ...) {
-
+                                class_train,
+                                n_relevant_variables,
+                                alpha_train,
+                                # The proportion of obs in the Xtrain to be trimmed
+                                model_name,
+                                swap_step,
+                                ctrl_init,
+                                ctrl_GA,
+                                ...) {
   N_train <- nrow(X_train)
   ltrain <- mclust::unmap(class_train)
   D <- ncol(X_train)
@@ -20,7 +19,6 @@ raedda_l_EMST_model <- function(X_train,
 
 
   if (alpha_train != 0) {
-
     nsamp <- ctrl_init$n_samp
     max_iter_init <- ctrl_init$max_iter
 
@@ -31,9 +29,9 @@ raedda_l_EMST_model <- function(X_train,
         # I perform the estimation starting from nsamp J_g subsets of sample size (d+1), inspired to what done in \cite{Hubert2018}
         X_train = X_train,
         class_train = class_train,
-        ltrain=ltrain,
+        ltrain = ltrain,
         alpha_train = alpha_train,
-        n_relevant_variables=n_relevant_variables,
+        n_relevant_variables = n_relevant_variables,
         model_name = model_name,
         swap_step = swap_step,
         ctrl_GA = ctrl_GA,
@@ -48,7 +46,7 @@ raedda_l_EMST_model <- function(X_train,
     G_E_F <- robust_result$G_E_F
 
   } else{
-
+    N_train_trim <- NULL
     # M step: computed for the whole set of columns D
 
     fitm <-
@@ -64,19 +62,28 @@ raedda_l_EMST_model <- function(X_train,
     S_R <- fitm_one_group$parameters$variance$sigma[, , 1]
 
     # S step
-    if(model_name=="EEI") {
-      F_position <- order(diag(S_R_w[,,1])/diag(S_R)) # (5.21 b) Ritter pag 209
-      F_subset <- (1:D)[F_position<=n_relevant_variables]
-    } else if(model_name == "VVI") {
+    if (model_name == "EEI") {
       F_position <-
-        order(log(apply(S_R_w, 3, diag)/ diag(S_R)) %*% fitm$parameters$pro) # (5.21) Ritter pag 209
-      F_subset <- (1:D)[F_position<=n_relevant_variables]
+        order(diag(S_R_w[, , 1]) / diag(S_R)) # (5.21 b) Ritter pag 209
+      F_subset <- (1:D)[F_position <= n_relevant_variables]
+    } else if (model_name == "VVI") {
+      F_position <-
+        order(log(apply(S_R_w, 3, diag) / diag(S_R)) %*% fitm$parameters$pro) # (5.21) Ritter pag 209
+      F_subset <- (1:D)[F_position <= n_relevant_variables]
     } else {
-      if(swap_step=="exhaustive"){
-        H_F_value <- apply(possible_col_subset, 1, H_F_subset, S_R_w=S_R_w, S_R=S_R, fitm = fitm)
+      if (swap_step == "exhaustive") {
+        H_F_value <-
+          apply(
+            possible_col_subset,
+            1,
+            H_F_subset,
+            S_R_w = S_R_w,
+            S_R = S_R,
+            fitm = fitm
+          )
         F_subset <-
           possible_col_subset[which.min(H_F_value), , drop = TRUE]
-      } else if (swap_step=="ga"){
+      } else if (swap_step == "ga") {
         swap_step_GA <- kofnGA::kofnGA(
           n = D,
           k = n_relevant_variables,
@@ -99,12 +106,30 @@ raedda_l_EMST_model <- function(X_train,
       }
     }
     E_subset <- setdiff(1:D, F_subset)
-}
+
+    # T-step (used for computing log-lik afterwards)
+
+    G_E_F <-
+      S_R[E_subset, F_subset, drop = FALSE] %*% MASS::ginv(S_R[F_subset, F_subset, drop =
+                                                                 FALSE])
+    m_E_F <-
+      as.vector(fitm_one_group$parameters$mean[E_subset, , drop = FALSE] - G_E_F %*%
+                  fitm_one_group$parameters$mean[F_subset, , drop = FALSE])
+    V_E_F <-
+      S_R[E_subset, E_subset, drop = FALSE] - S_R[E_subset, F_subset, drop = FALSE] %*%
+      MASS::ginv(S_R[F_subset, F_subset, drop = FALSE]) %*%
+      S_R[F_subset, E_subset, drop = FALSE]
+
+  }
   # Checking if errors in the procedure -------------------------------------
 
   fitetrain <-
     tryCatch(
-      estep_EMST(data = X_train, fitm = fitm, F_subset = F_subset),
+      estep_EMST(
+        data = X_train,
+        fitm = fitm,
+        F_subset = F_subset
+      ),
       error = function(e) {
         list(z = NA)
       }
@@ -138,60 +163,64 @@ raedda_l_EMST_model <- function(X_train,
         classLabel[i]), levels = classLabel) # I classify a posteriori also the trimmed units
     pos_trimmed_train <- NULL
     cltrain_after_trimming <- NULL
-    if (alpha_train != 0) {
-      grouping_component_ll <-
-        tryCatch(
-          sapply(1:fitm$G, function(g)
-            log(fitm$parameters$pro[g]) + mvnfast::dmvn(
-              X = as.matrix(X_train[,F_subset]),
-              mu = fitm$parameters$mean[F_subset, g],
-              sigma = fitm$parameters$variance$sigma[F_subset,F_subset , g],
-              log = T
-            )),
-          error = function(e)
-            - Inf,
-          warning = function(w)
-            - Inf
-        )
 
-
-      ind_D_Xtrain_cdens <-
-        cbind(1:N_train, mclust::map(ltrain)) # matrix with obs and respective group from ltrain
-
-      grouping_ll <-
-        grouping_component_ll[ind_D_Xtrain_cdens] # I compute D_g conditioning ON the fact that I know the supposed true class
-
-      eigen_V_E_F <-
-        eigen(V_E_F, symmetric = TRUE, only.values = TRUE)$values # I force symmetric=TRUE to avoid numerical problems
-
-      eigen_tol <-  1e-12 # FIX: maybe function arg?
-
-      is_singular_V_E_F <- any(eigen_V_E_F < eigen_tol)
-
-      if(is_singular_V_E_F){ # when D is large residual scatter matrix may be singular.
-        # In such a case, the data still allows us to estimate a singular normal distribution on a subspace using the generalized inverse (pag 208 Ritter2015)
-        no_grouping_ll <-
-          dsmvnorm(
-            x = as.matrix(X_train[, E_subset, drop = FALSE]) - as.matrix(X_train[, F_subset, drop = FALSE]) %*%
-              t(G_E_F),
-            mean = m_E_F,
-            sigma = V_E_F,
-            log = T,
-            eigen_sigma = eigen_V_E_F,
-            eigen_tol = eigen_tol
-          )
-      } else {
-        no_grouping_ll <-
-          mvnfast::dmvn(
-            X = as.matrix(X_train[, E_subset, drop = FALSE]) - as.matrix(X_train[, F_subset, drop = FALSE]) %*%
-              t(G_E_F),
-            mu = m_E_F,
-            sigma = V_E_F,
+    grouping_component_ll <-
+      tryCatch(
+        sapply(1:fitm$G, function(g)
+          log(fitm$parameters$pro[g]) + mvnfast::dmvn(
+            X = as.matrix(X_train[, F_subset]),
+            mu = fitm$parameters$mean[F_subset, g],
+            sigma = fitm$parameters$variance$sigma[F_subset, F_subset , g],
             log = T
-          )
-      }
+          )),
+        error = function(e)
+          - Inf,
+        warning = function(w)
+          - Inf
+      )
 
-      unit_likelihood <- grouping_ll + no_grouping_ll
+
+    ind_D_Xtrain_cdens <-
+      cbind(1:N_train, mclust::map(ltrain)) # matrix with obs and respective group from ltrain
+
+    grouping_ll <-
+      grouping_component_ll[ind_D_Xtrain_cdens] # I compute D_g conditioning ON the fact that I know the supposed true class
+
+    eigen_V_E_F <-
+      eigen(V_E_F, symmetric = TRUE, only.values = TRUE)$values # I force symmetric=TRUE to avoid numerical problems
+
+    eigen_tol <-  1e-12 # FIX: maybe function arg?
+
+    is_singular_V_E_F <- any(eigen_V_E_F < eigen_tol)
+
+    if (is_singular_V_E_F) {
+      # when D is large residual scatter matrix may be singular.
+      # In such a case, the data still allows us to estimate a singular normal distribution on a subspace using the generalized inverse (pag 208 Ritter2015)
+      no_grouping_ll <-
+        dsmvnorm(
+          x = as.matrix(X_train[, E_subset, drop = FALSE]) - as.matrix(X_train[, F_subset, drop = FALSE]) %*%
+            t(G_E_F),
+          mean = m_E_F,
+          sigma = V_E_F,
+          log = T,
+          eigen_sigma = eigen_V_E_F,
+          eigen_tol = eigen_tol
+        )
+    } else {
+      no_grouping_ll <-
+        mvnfast::dmvn(
+          X = as.matrix(X_train[, E_subset, drop = FALSE]) - as.matrix(X_train[, F_subset, drop = FALSE]) %*%
+            t(G_E_F),
+          mu = m_E_F,
+          sigma = V_E_F,
+          log = T
+        )
+    }
+
+    unit_likelihood <- grouping_ll + no_grouping_ll
+    ll <- sum(unit_likelihood)
+
+    if (alpha_train != 0) {
       pos_trimmed_train <-
         which(unit_likelihood <= (sort(unit_likelihood, decreasing = F)[[ceiling(N_train * alpha_train)]]))
 
@@ -199,6 +228,7 @@ raedda_l_EMST_model <- function(X_train,
       cltrain_after_trimming <-
         factor(cltrain, levels = c(classLabel, "0"))
       cltrain_after_trimming[pos_trimmed_train] <- "0"
+        ll <- sum(unit_likelihood[-pos_trimmed_train])
     }
 
     res$train <- list()
@@ -208,19 +238,23 @@ raedda_l_EMST_model <- function(X_train,
     res$train$obs_trimmed <- pos_trimmed_train
     res$train$alpha_train <- alpha_train
     bic_all <-
-      2 * ll - (mclust::nMclustParams( # parameters for the Grouping part
-        modelName = model_name,
-        d = n_relevant_variables,
-        G = G,
-        noise = FALSE,
-        equalPro = FALSE
-      ) + mclust::nMclustParams( # parameters for the No Grouping part
-        modelName = model_name,
-        d = D,
-        G = 1,
-        noise = FALSE,
-        equalPro = FALSE
-      )) * log(fitm$n) # if alpha_train !=0 this is trimmed BIC
+      2 * ll - (
+        mclust::nMclustParams(
+          # parameters for the Grouping part
+          modelName = model_name,
+          d = n_relevant_variables,
+          G = G,
+          noise = FALSE,
+          equalPro = FALSE
+        ) + mclust::nMclustParams(
+          # parameters for the No Grouping part
+          modelName = model_name,
+          d = D,
+          G = 1,
+          noise = FALSE,
+          equalPro = FALSE
+        )
+      ) * log(fitm$n) # if alpha_train !=0 this is trimmed BIC
     res$ll <- ll
     res$bic <- bic_all
   }
